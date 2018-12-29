@@ -1,0 +1,16 @@
+[Unit]
+Description=OZ Global Intercom Relay Server Unit
+
+[Service]
+ExecStart=/usr/bin/nodejs /srv/apps/oz_rw_gi_relaysserver/bin/main.js
+ExecReload=/usr/bin/nodejs /srv/apps/oz_rw_gi_relaysserver/bin/app-cli.js REBOOT
+Restart=always
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=GIRS
+User=nodejs
+Group=nodejs
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

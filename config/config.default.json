@@ -1,0 +1,19 @@
+{
+    "log": {
+        "info": true,
+        "debug": true,
+        "warn": true
+    },
+    "master": {
+        "title": "Global Intercom Relay Server",
+        "ioport": 47010
+    },
+    "cli": {
+        "commands": [
+            "REBOOT"
+        ]
+    },
+    "relayio":{
+        "port": 47015
+    }
+}
