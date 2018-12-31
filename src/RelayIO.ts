@@ -27,8 +27,25 @@ interface ChatMessage {
     sourceVersion: string
 }
 
+interface RisingWorldServer{
+    isDedicated: boolean,
+    name: string,
+    playerList: RisingWorldPlayer[]
+}
+
+interface RisingWorldPlayer{
+    id64: string,   // long id, cant be handled as number in javascript right now
+    name: string    // The ingame name of this player
+}
+
+interface AdvancedWebSocket extends WebSocket {
+    id: number,
+    rwInfo: RisingWorldServer
+}
+
 export class RelayIO extends WorkerProcess {
     protected ioServer: Server = null;
+    protected connectionIndex: number = 0;
 
     constructor() {
         super();
@@ -65,20 +82,21 @@ export class RelayIO extends WorkerProcess {
     protected setupIOServer(): void {
         this.ioServer = new Server({ port: cfg.relayio.port });
         !cfg.log.info ? null : console.log(LOGTAG.INFO, "[RelayIO]", "Setting up server");
-        this.ioServer.on('connection', (ws) => {
-            !cfg.log.debug ? null : console.log(LOGTAG.DEBUG, "[RelayIO]", `Client connected`, ws.url);
+        this.ioServer.on('connection', (ws: AdvancedWebSocket, req: IncomingMessage) => {
+            ws.id = this.connectionIndex++;
+            !cfg.log.debug ? null : console.log(LOGTAG.DEBUG, "[RelayIO]", `Client connected from <${req.connection.remoteAddress}> <ID:${ws.id}>`);
             ws.on("message", (message: any) => {
                 let decodedMessage: GIMessage = JSON.parse(message);
                 // !cfg.log.debug ? null : console.log(LOGTAG.DEV, `[ws::onMessage]`, message, decodedMessage);
                 switch (decodedMessage.event) {
                     case GI_EVENT.BC_MESSAGE:
-                        !cfg.log.info ? null : console.log(LOGTAG.INFO, `[ws::onMessage]`, `Got BC message, sending to <${this.ioServer.clients.size}> clients`);
+                        !cfg.log.info ? null : console.log(LOGTAG.INFO, `[ws::onMessage]`, `Got BC message from <ID:${ws.id}>, sending to <${this.ioServer.clients.size}> clients`);
                         this.ioServer.clients.forEach((clientWS) => {
                             !(clientWS.readyState === WebSocket.OPEN) ? null : clientWS.send(JSON.stringify({ event: GI_EVENT.BC_MESSAGE, payload: decodedMessage.payload }));
                         });
                         break;
                     default:
-                        !cfg.log.warn ? null : console.log(LOGTAG.WARN, `[ws::onMessage]`, `Unknown message event <${decodedMessage.event}>`);
+                        !cfg.log.warn ? null : console.log(LOGTAG.WARN, `[ws::onMessage]`, `Unknown message event <${decodedMessage.event}> from <ID:${ws.id}>`);
                         break;
                 }
             });
@@ -88,8 +106,8 @@ export class RelayIO extends WorkerProcess {
             ws.on("unexpected-response", (req: ClientRequest, response: IncomingMessage) => {
                 !cfg.log.debug ? null : console.log(LOGTAG.DEBUG, '[ws:ur]', req, response);
             });
-            ws.on("close", (x, y) => {
-                !cfg.log.debug ? null : console.log(LOGTAG.DEBUG, '[ws:close]', ws.url + " has left ", JSON.stringify(x), JSON.stringify(y));
+            ws.on("close", (code, reason) => {
+                !cfg.log.debug ? null : console.log(LOGTAG.DEBUG, '[ws:close]', `Client <ID:${ws.id}> disconnected, Code: <${code}> Reason: <${reason}>`);
             });
             ws.on("open", () => {
                 !cfg.log.debug ? null : console.log(LOGTAG.DEBUG, "[ws:open]");
