@@ -84,7 +84,7 @@ export class RelayIO extends WorkerProcess {
         !cfg.log.info ? null : console.log(LOGTAG.INFO, "[RelayIO]", "Setting up server");
         this.ioServer.on('connection', (ws: AdvancedWebSocket, req: IncomingMessage) => {
             ws.id = this.connectionIndex++;
-            !cfg.log.debug ? null : console.log(LOGTAG.DEBUG, "[RelayIO]", `Client connected from <${req.connection.remoteAddress}> <ID:${ws.id}>`);
+            !cfg.log.debug ? null : console.log(LOGTAG.DEBUG, "[RelayIO]", `Client connected from <${req.headers['x-forwarded-for'] || req.connection.remoteAddress}> <ID:${ws.id}>`);
             ws.on("message", (message: any) => {
                 let decodedMessage: GIMessage = JSON.parse(message);
                 // !cfg.log.debug ? null : console.log(LOGTAG.DEV, `[ws::onMessage]`, message, decodedMessage);
