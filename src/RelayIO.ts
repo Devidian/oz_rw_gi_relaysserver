@@ -163,10 +163,6 @@ export class RelayIO extends WorkerProcess {
                 // !cfg.log.debug ? null : console.log(LOGTAG.DEV, `[ws::onMessage]`, message, decodedMessage);
                 switch (decodedMessage.event) {
                     case GI_EVENT.BC_MESSAGE:
-
-                        this.ioServer.clients.forEach((clientWS) => {
-                            !(clientWS.readyState === WebSocket.OPEN) ? null : clientWS.send(JSON.stringify({ event: GI_EVENT.BC_MESSAGE, payload: decodedMessage.payload }));
-                        });
                         this.sendBCMessageToRisingWorld(decodedMessage.payload, "WS:" + ws.id);
                         this.sendBCMessageToDiscord(decodedMessage.payload);
                         break;
