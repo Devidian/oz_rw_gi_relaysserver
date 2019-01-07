@@ -79,7 +79,7 @@ export class RelayIO extends WorkerProcess {
     }
 
     protected setupDiscordBot(): void {
-        if (!cfg.discord.enabled) {
+        if (!cfg.discord || !cfg.discord.enabled) {
             !cfg.log.info ? null : console.log(LOGTAG.INFO, "[RelayIO:setupDiscordBot]", `Discord not enabled.`);
             return;
         } else {
@@ -92,7 +92,7 @@ export class RelayIO extends WorkerProcess {
                 if (msg.author.bot) {
                     return;
                 }
-                console.log(msg);
+                // console.log(msg);
                 const CH: TextChannel = msg.channel as TextChannel;
                 // const message:string = msg.content;
                 // const messageId: string = msg.id;
