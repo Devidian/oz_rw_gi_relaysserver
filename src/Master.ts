@@ -84,7 +84,7 @@ export class Master {
 		}).on("message", (msg: any) => {
 			if (msg.type == "ABC") {
 			} else {
-				!cfg.log.debug ? null : console.log(LOGTAG.DEBUG, '[Master]', `Worker[${W.pid}/${type}]: ${msg.type}`);
+				!cfg.log.debug ? null : console.log(LOGTAG.DEBUG, '[Master]', `Worker[${W.pid}/${type}]:`, msg);
 			}
 		});
 

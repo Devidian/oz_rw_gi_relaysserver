@@ -16,6 +16,10 @@ export interface Config {
     },
     relayio: {
         port: number
+    },
+    discord: {
+        enabled: boolean,
+        token: string
     }
 };
 export var cfg: Config;

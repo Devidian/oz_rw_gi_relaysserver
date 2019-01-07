@@ -15,5 +15,9 @@
     },
     "relayio":{
         "port": 47015
+    },
+    "discord":{
+        "enable": false,
+        "token": null
     }
 }
