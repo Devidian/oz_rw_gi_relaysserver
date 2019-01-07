@@ -1,4 +1,4 @@
-import { Client, TextChannel, Guild, GuildChannel, MessageOptions, Attachment, RichEmbed } from "discord.js";
+import { Client, TextChannel, Guild, GuildChannel, MessageOptions, Attachment, RichEmbed, WebhookMessageOptions } from "discord.js";
 import { ClientRequest, IncomingMessage } from "http";
 import * as WebSocket from "ws";
 import { Server } from "ws";
@@ -86,6 +86,18 @@ export class RelayIO extends WorkerProcess {
             this.DiscordBot = new Client();
             this.DiscordBot.on('ready', () => {
                 !cfg.log.info ? null : console.log(LOGTAG.INFO, "[RelayIO:setupDiscordBot]", `Logged in as ${this.DiscordBot.user.tag}!`);
+                // const DebugMessage: ChatMessage = {
+                //     chatChannel: "global",
+                //     chatContent: "Debug test",
+                //     playerName: "Test",
+                //     chatVersion: 1,
+                //     createdOn: new Date(),
+                //     playerUID: null,
+                //     sourceIP: null,
+                //     sourceName: "Debug",
+                //     sourceVersion: "0"
+                // };
+                // !cfg.log.debug ? null : this.sendBCMessageToDiscord(DebugMessage);
             });
             this.DiscordBot.on('message', msg => {
                 if (!msg.guild) return;
@@ -115,6 +127,14 @@ export class RelayIO extends WorkerProcess {
         }
     }
 
+    /**
+     *
+     *
+     * @protected
+     * @param {ChatMessage} Message
+     * @param {string} [source="unknown"]
+     * @memberof RelayIO
+     */
     protected sendBCMessageToRisingWorld(Message: ChatMessage, source: string = "unknown"): void {
         !cfg.log.info ? null : console.log(LOGTAG.INFO, `[ws::sendBCMessageToRisingWorld]`, `Got BC message from <ID:${source}>, sending to <${this.ioServer.clients.size}> clients`);
         this.ioServer.clients.forEach((clientWS) => {
@@ -131,19 +151,42 @@ export class RelayIO extends WorkerProcess {
      */
     protected sendBCMessageToDiscord(Message: ChatMessage): void {
         !cfg.log.debug ? null : console.log("[sendBCMessageToDiscord]", `Discord status is ${this.DiscordBot.status}`);
-        if (this.DiscordBot.status) {
+        if (this.DiscordBot.status === 0) {
 
+            // this.DiscordBot.channels.find("name", Message.chatChannel)
+            this.DiscordBot.guilds.forEach((Guild: Guild) => {
+                Guild.channels.filter((gc) => gc.name == Message.chatChannel).forEach((GC: GuildChannel) => {
+                    if (GC.type == "text") {
+                        // const embed = new RichEmbed();
+                        const TC: TextChannel = (GC as TextChannel);
+                        const WebHookName = 'RW-GI-BOT-' + TC.name.toUpperCase();
+                        TC.fetchWebhooks().then((WHC) => {
+                            if (!WHC.has(WebHookName)) {
+                                return TC.createWebhook(WebHookName, null);
+                            }
+                            else {
+                                return WHC.get(WebHookName);
+                            }
+                        }).then((WH) => {
+                            const WHO: WebhookMessageOptions = {
+                                username: Message.playerName
+                            };
+                            WH.sendMessage(Message.chatContent, WHO);
+                        }).catch(e => {
+                            console.log(LOGTAG.ERROR, e);
+                        });
+                        // embed.setAuthor(Message.playerName);
+                        // const msg: MessageOptions = {
+                        //     embed: embed
+                        // };
+                        // (GC as TextChannel).send(Message.chatContent, msg);
+                        // .send({ content: Message.chatContent, author: { name: Message.playerName } }).then(M => {
+
+                        // })
+                    }
+                });
+            })
         }
-        // this.DiscordBot.channels.find("name", Message.chatChannel)
-        this.DiscordBot.guilds.forEach((Guild: Guild) => {
-            Guild.channels.findAll("name", Message.chatChannel).forEach((GC: GuildChannel) => {
-                if (GC.type == "text") {
-                    const embed = new RichEmbed();
-                    embed.author = { name: Message.playerName };
-                    (GC as TextChannel).send(Message.chatContent, embed);
-                }
-            });
-        })
     }
 
     /**
