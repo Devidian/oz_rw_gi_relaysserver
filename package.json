@@ -1,6 +1,6 @@
 {
 	"name": "oz_rw_gi_relaysserver",
-	"version": "0.1.1",
+	"version": "0.2.1",
 	"scripts": {
 		"start": "node bin/main"
 	},
@@ -8,7 +8,8 @@
 	"dependencies": {
 		"rxjs": "^6.3.3",
 		"ws": "^6.1.2",
-		"discord.js": "^11.4.2"
+		"discord.js": "^11.4.2",
+		"jdenticon": "^2.1.1"
 	},
 	"devDependencies": {
 		"@types/node": "^10.12.18",

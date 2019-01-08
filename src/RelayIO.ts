@@ -4,6 +4,7 @@ import * as WebSocket from "ws";
 import { Server } from "ws";
 import { cfg, LOGTAG } from "./config";
 import { WorkerProcess } from "./WorkerProcess";
+import * as jdenticon from "jdenticon";
 
 enum GI_EVENT {
     BC_MESSAGE = "broadcastMessage",
@@ -160,16 +161,23 @@ export class RelayIO extends WorkerProcess {
                         // const embed = new RichEmbed();
                         const TC: TextChannel = (GC as TextChannel);
                         const WebHookName = 'RW-GI-BOT-' + TC.name.toUpperCase();
+
                         TC.fetchWebhooks().then((WHC) => {
-                            if (!WHC.has(WebHookName)) {
-                                return TC.createWebhook(WebHookName, null);
-                            }
-                            else {
-                                return WHC.get(WebHookName);
+                            const WH = WHC.filter((wh) => wh.name === WebHookName).first();
+                            if (!WH) {
+                                // !cfg.log.debug ? null : console.log(LOGTAG.DEBUG, "[sendBCMessageToDiscord]", `creating web-hook ${WebHookName}`);
+                                return TC.createWebhook(WebHookName, jdenticon.toPng(process.hrtime().join("#"), 256));
+                            } else {
+                                // !cfg.log.debug ? null : console.log(LOGTAG.DEBUG, "[sendBCMessageToDiscord]", `web-hook ${WebHookName} found`);
+                                return WH;
                             }
                         }).then((WH) => {
+                            // const Avatar = jdenticon.toPng(Message.playerUID, 256);
+                            // const b64Avatar = "data:image/png;base64," + encodeURIComponent(Avatar.toString('base64'));
+                            const AvatarURL = "https://api.adorable.io/avatars/128/"+Message.playerUID;
                             const WHO: WebhookMessageOptions = {
-                                username: Message.playerName
+                                username: Message.playerName,
+                                avatarURL: AvatarURL
                             };
                             WH.sendMessage(Message.chatContent, WHO);
                         }).catch(e => {
