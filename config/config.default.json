@@ -13,11 +13,27 @@
             "REBOOT"
         ]
     },
-    "relayio":{
+    "relayio": {
         "port": 47015
     },
-    "discord":{
+    "discord": {
         "enable": false,
         "token": null
+    },
+    "db": {
+        "idSecret": "1ris3th3w0rldifshe15ris1ng"
+    },
+    "mongo": {
+        "url": "",
+        "db": "risingWorld",
+        "options": {
+            "appname": "RW-GI",
+            "useNewUrlParser": true,
+            "native_parser": true,
+            "readConcern": {
+                "level": "majority"
+            },
+            "autoReconnect": true
+        }
     }
 }

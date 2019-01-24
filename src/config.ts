@@ -1,5 +1,6 @@
 import { readFileSync } from "fs";
 import { resolve } from "path";
+import { MongoConfig } from "./mongo/models/MongoConfig"
 
 export interface Config {
     log: {
@@ -20,7 +21,11 @@ export interface Config {
     discord: {
         enabled: boolean,
         token: string
-    }
+    },
+    db: {
+        idSecret: string
+    },
+    mongo: MongoConfig
 };
 export var cfg: Config;
 
