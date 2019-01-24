@@ -281,7 +281,7 @@ export class RelayIO extends WorkerProcess {
      * @memberof RelayIO
      */
 	protected sendBCMessageToDiscord(Message: ChatMessage): void {
-		if (this.DiscordBot.status === 0) {
+		if (this.DiscordBot && this.DiscordBot.status === 0) {
 
 			// this.DiscordBot.channels.find("name", Message.chatChannel)
 			this.DiscordBot.guilds.forEach((Guild: Guild) => {
