@@ -247,6 +247,7 @@ export class MongoCollection<TC extends GeneralObject> {
 				throw "Error on update One";
 			}
 		});
+	}
 
 	/**
 	 * passthrough updateMany method for current collection
