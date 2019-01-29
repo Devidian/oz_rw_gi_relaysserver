@@ -112,6 +112,7 @@ export class RelayIO extends WorkerProcess {
 	protected ioServer: Server = null;
 	protected connectionIndex: number = 0;
 	protected DiscordBot: Client = null;
+	protected timer: NodeJS.Timer = null;
 
 	public static CHAT_VERSION = 2;
 
@@ -126,6 +127,7 @@ export class RelayIO extends WorkerProcess {
 
 	constructor() {
 		super();
+		this.run();
 	}
 
     /**
@@ -135,7 +137,7 @@ export class RelayIO extends WorkerProcess {
      * @memberof RelayIO
      */
 	protected run(): void {
-		// throw new Error("Method not implemented.");
+		this.timer = setTimeout(_ => { this.run(); }, 200);
 	}
 
     /**
@@ -216,6 +218,9 @@ export class RelayIO extends WorkerProcess {
 					sourceVersion: null
 				};
 				this.sendBCMessageToRisingWorld(ChatMessage, ChatMessage.sourceName);
+			});
+			this.DiscordBot.on("error", (e: Error) => {
+				console.log(LOGTAG.ERROR, "[DiscordBot.onError]", e);
 			});
 			this.DiscordBot.login(cfg.discord.token);
 		}
@@ -589,7 +594,7 @@ export class RelayIO extends WorkerProcess {
 		const chName: string = data.channel.toLowerCase();
 		const chPass: string = data.password || null;
 
-		if(!Player.saveSettings){
+		if (!Player.saveSettings) {
 			ws.send(JSON.stringify({ event: GI_EVENT.PLAYER_RESPONSE_ERROR, payload: Player, subject: chName, errorCode: "RELAY_CREATE_NOTREGISTERED" }));
 			return;
 		}
@@ -618,8 +623,8 @@ export class RelayIO extends WorkerProcess {
 		}
 
 		this.channelCol.save(ch).then(Channel => {
-			if(!Channel){
-				console.log(LOGTAG.WARN,"[playerCreateChannel]", "No channel returned after save");
+			if (!Channel) {
+				console.log(LOGTAG.WARN, "[playerCreateChannel]", "No channel returned after save");
 				return;
 			}
 			RelayIO.Channels.set(chName, ch);
@@ -628,12 +633,14 @@ export class RelayIO extends WorkerProcess {
 
 			ws.send(JSON.stringify({ event: GI_EVENT.PLAYER_RESPONSE_SUCCESS, payload: Player, subject: chName, successCode: "RELAY_CREATE_SUCCESS" }));
 			if (Player.saveSettings) {
-				this.playerCol.save(Player).then((P) => {
+				return this.playerCol.save(Player).then((P) => {
 					console.log(LOGTAG.DEBUG, "[playerCreateChannel]", `Player ${P.name} successfully joined ${Channel._id} and settings saved!`);
-				}).catch(e => console.log);
+				});
 			}
 
-		}).catch(e => console.log);
+		}).catch(e => {
+			console.log(LOGTAG.ERROR, "[playerCreateChannel]", e);
+		});
 	}
 
 	/**
