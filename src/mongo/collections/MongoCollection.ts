@@ -236,19 +236,19 @@ export class MongoCollection<TC extends GeneralObject> {
 			return Promise.reject('No Collection set!');
 		}
 		try {
-			await this.Collection.updateOne(filter, update, options || { upsert: true });
+			const r = await this.Collection.updateOne(filter, update, options || { upsert: true, j: true });
+			!cfg.log.debug ? null : console.log(LOGTAG.DEV, "Executing findOne", r);
+			return this.Collection.findOne(filter);
 		}
 		catch (E) {
 			if (E.code == 11000) {
 				console.log('[E]', '[updateOne]', `[${this.Collection.collectionName}]`, E.message, '[CATCHED]');
-				// return this.Collection.findOne(filter);
+				return this.Collection.findOne(filter);
 			} else {
 				console.log('[E]', '[updateOne]', `[${this.Collection.collectionName}]`, E.message);
 				throw "Error on update One";
 			}
 		}
-		!cfg.log.debug ? null : console.log(LOGTAG.DEV, "Executing findOne");
-		return this.Collection.findOne(filter);
 	}
 
 	/**

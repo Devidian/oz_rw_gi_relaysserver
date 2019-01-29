@@ -1,6 +1,6 @@
 {
 	"name": "oz_rw_gi_relaysserver",
-	"version": "0.8.0",
+	"version": "0.9.0-SNAPSHOT",
 	"scripts": {
 		"start": "node bin/main"
 	},
