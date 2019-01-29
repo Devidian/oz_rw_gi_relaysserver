@@ -231,21 +231,24 @@ export class MongoCollection<TC extends GeneralObject> {
 	 * @returns {Promise<T>}
 	 * @memberof MongoCollection
 	 */
-	public updateOne(filter: FilterQuery<TC>, update: Object, options?: ReplaceOneOptions): Promise<TC> {
+	public async updateOne(filter: FilterQuery<TC>, update: Object, options?: ReplaceOneOptions): Promise<TC> {
 		if (!this.Collection) {
 			return Promise.reject('No Collection set!');
 		}
-		return this.Collection.updateOne(filter, update, options || { upsert: true }).catch((E) => {
+		try {
+			await this.Collection.updateOne(filter, update, options || { upsert: true });
+		}
+		catch (E) {
 			if (E.code == 11000) {
 				console.log('[E]', '[updateOne]', `[${this.Collection.collectionName}]`, E.message, '[CATCHED]');
-				return true;
+				// return this.Collection.findOne(filter);
 			} else {
 				console.log('[E]', '[updateOne]', `[${this.Collection.collectionName}]`, E.message);
 				throw "Error on update One";
 			}
-		}).then(() => {
-			return this.Collection.findOne(filter);
-		});
+		}
+		!cfg.log.debug ? null : console.log(LOGTAG.DEV, "Executing findOne");
+		return this.Collection.findOne(filter);
 	}
 
 	/**

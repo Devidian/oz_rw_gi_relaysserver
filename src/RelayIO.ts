@@ -237,7 +237,7 @@ export class RelayIO extends WorkerProcess {
 	protected broadcastMessage(Message: ChatMessage, ws: AdvancedWebSocket): void {
 		if (Message.chatVersion == 1) {
 			// Backwards-compatible
-			this.sendBCMessageToRisingWorld(Message, "WS:" + ws);
+			this.sendBCMessageToRisingWorld(Message, "WS:" + ws.id);
 			if (!RelayIO.Channels.has(Message.chatChannel) || !RelayIO.Channels.get(Message.chatChannel).secure) {
 				// only send to Discord if channel is unknown or not secure
 				this.sendBCMessageToDiscord(Message);
@@ -251,10 +251,10 @@ export class RelayIO extends WorkerProcess {
 				if (!player.channels.includes(ch._id)) {
 					ws.send(JSON.stringify({ event: GI_EVENT.PLAYER_RESPONSE_ERROR, payload: player, subject: Message.chatChannel, errorCode: "RELAY_CHANNEL_NOTMEMBER" }));
 				} else if (!ch.secure) {
-					this.sendBCMessageToRisingWorld(Message, "WS:" + ws);
+					this.sendBCMessageToRisingWorld(Message, "WS:" + ws.id);
 					this.sendBCMessageToDiscord(Message);
 				} else {
-					this.sendBCMessageToRisingWorld(Message, "WS:" + ws);
+					this.sendBCMessageToRisingWorld(Message, "WS:" + ws.id);
 				}
 			} else {
 				// response invalid channel
@@ -622,9 +622,9 @@ export class RelayIO extends WorkerProcess {
 			ch.password = createHmac('sha256', secret).update(chPass).digest('hex');
 		}
 
-		this.channelCol.save(ch).then(Channel => {
+		this.channelCol.save(ch).then((Channel) => {
 			if (!Channel) {
-				console.log(LOGTAG.WARN, "[playerCreateChannel]", "No channel returned after save");
+				console.log(LOGTAG.WARN, "[playerCreateChannel]", "No channel returned after save", Channel);
 				return;
 			}
 			RelayIO.Channels.set(chName, ch);
