@@ -17,7 +17,7 @@
         "port": 47015
     },
     "discord": {
-        "enable": false,
+        "enabled": false,
         "token": null
     },
     "db": {

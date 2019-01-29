@@ -52,7 +52,7 @@ interface PlayerMessage {
 }
 
 /**
- * 
+ *
  *
  * @interface PlayerRegisterMessage
  * @extends {PlayerMessage}
@@ -431,7 +431,7 @@ export class RelayIO extends WorkerProcess {
 				Player.saveSettings = true;
 				ws.send(JSON.stringify({ event: GI_EVENT.PLAYER_RESPONSE_SUCCESS, payload: Player, successCode: "RELAY_SUCCESS_REGISTER" }));
 			}
-			ws.send(JSON.stringify({ event: GI_EVENT.PLAYER_REGISTER, payload: Player }));
+			// ws.send(JSON.stringify({ event: GI_EVENT.PLAYER_REGISTER, payload: Player }));
 
 			// Save changes
 			this.playerCol.save(Player).then((P) => {
@@ -475,7 +475,7 @@ export class RelayIO extends WorkerProcess {
 				// Already unset
 				ws.send(JSON.stringify({ event: GI_EVENT.PLAYER_RESPONSE_INFO, payload: Player, infoCode: "RELAY_INFO_UNREGISTERED" }));
 			}
-			ws.send(JSON.stringify({ event: GI_EVENT.PLAYER_UNREGISTER, payload: Player }));
+			// ws.send(JSON.stringify({ event: GI_EVENT.PLAYER_UNREGISTER, payload: Player }));
 
 			// Save changes
 			this.playerCol.hardRemove({ _id: Player._id }).then((r) => {
