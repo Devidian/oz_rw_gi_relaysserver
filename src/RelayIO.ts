@@ -589,6 +589,11 @@ export class RelayIO extends WorkerProcess {
 		const chName: string = data.channel.toLowerCase();
 		const chPass: string = data.password || null;
 
+		if(!Player.saveSettings){
+			ws.send(JSON.stringify({ event: GI_EVENT.PLAYER_RESPONSE_ERROR, payload: Player, subject: chName, errorCode: "RELAY_CREATE_NOTREGISTERED" }));
+			return;
+		}
+
 		if (chName.startsWith('global')) {
 			ws.send(JSON.stringify({ event: GI_EVENT.PLAYER_RESPONSE_ERROR, payload: Player, subject: chName, errorCode: "RELAY_CREATE_NOGLOBAL" }));
 			return;
@@ -611,8 +616,9 @@ export class RelayIO extends WorkerProcess {
 			ch.secure = true;
 			ch.password = createHmac('sha256', secret).update(chPass).digest('hex');
 		}
-		RelayIO.Channels.set(chName, ch);
+
 		this.channelCol.save(ch).then(Channel => {
+			RelayIO.Channels.set(chName, ch);
 			console.log(LOGTAG.DEBUG, "[playerCreateChannel]", `Channel ${Channel._id} added and saved!`);
 			Player.channels.push(chName);
 
