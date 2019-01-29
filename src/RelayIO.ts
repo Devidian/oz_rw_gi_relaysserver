@@ -618,6 +618,10 @@ export class RelayIO extends WorkerProcess {
 		}
 
 		this.channelCol.save(ch).then(Channel => {
+			if(!Channel){
+				console.log(LOGTAG.WARN,"[playerCreateChannel]", "No channel returned after save");
+				return;
+			}
 			RelayIO.Channels.set(chName, ch);
 			console.log(LOGTAG.DEBUG, "[playerCreateChannel]", `Channel ${Channel._id} added and saved!`);
 			Player.channels.push(chName);
@@ -666,7 +670,7 @@ export class RelayIO extends WorkerProcess {
 						OtherPlayer.channels.splice(OtherPlayer.channels.indexOf(Channel._id), 1);
 						if (OtherPlayer.saveSettings) {
 							this.playerCol.save(OtherPlayer).then((P) => {
-								console.log(LOGTAG.DEBUG, "[playerCreateChannel]", `Player ${P.name} successfully left ${Channel._id} because it was closed!`);
+								console.log(LOGTAG.DEBUG, "[playerCloseChannel]", `Player ${P.name} successfully left ${Channel._id} because it was closed!`);
 							}).catch(e => console.log);
 						}
 						if (OtherPlayer.online) {
