@@ -235,20 +235,18 @@ export class MongoCollection<TC extends GeneralObject> {
 		if (!this.Collection) {
 			return Promise.reject('No Collection set!');
 		}
-		try {
-			this.Collection.updateOne(filter, update, options || { upsert: true, j: true }).then(r => {
-				!cfg.log.debug ? null : console.log(LOGTAG.DEV, "Executing findOne", r.upsertedId);
+		this.Collection.updateOne(filter, update, options || { upsert: true, j: true }).then(r => {
+			!cfg.log.debug ? null : console.log(LOGTAG.DEV, "Executing findOne", r.upsertedId);
+			return this.Collection.findOne(filter);
+		}).catch((E) => {
+			if (E.code == 11000) {
+				console.log('[E]', '[updateOne]', `[${this.Collection.collectionName}]`, E.message, '[CATCHED]');
 				return this.Collection.findOne(filter);
-			}).catch((E) => {
-				if (E.code == 11000) {
-					console.log('[E]', '[updateOne]', `[${this.Collection.collectionName}]`, E.message, '[CATCHED]');
-					return this.Collection.findOne(filter);
-				} else {
-					console.log('[E]', '[updateOne]', `[${this.Collection.collectionName}]`, E.message);
-					throw "Error on update One";
-				}
-			});
-		}
+			} else {
+				console.log('[E]', '[updateOne]', `[${this.Collection.collectionName}]`, E.message);
+				throw "Error on update One";
+			}
+		});
 
 	/**
 	 * passthrough updateMany method for current collection
