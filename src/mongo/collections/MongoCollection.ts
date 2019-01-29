@@ -235,9 +235,9 @@ export class MongoCollection<TC extends GeneralObject> {
 		if (!this.Collection) {
 			return Promise.reject('No Collection set!');
 		}
-		return this.Collection.updateOne(filter, update, options || { upsert: true, j: true }).then(r => {
-			!cfg.log.debug ? null : console.log(LOGTAG.DEV, "Executing findOne", r.upsertedId);
-			return this.Collection.findOne(filter);
+		return this.Collection.updateOne(filter, update, options || { upsert: true, j: true, w: "majority", wtimeout: 3000 }).then(r => {
+			// !cfg.log.debug ? null : console.log(LOGTAG.DEV, "Executing findOne", r.upsertedId);
+			return this.Collection.findOne<TC>(filter);
 		}).catch((E) => {
 			if (E.code == 11000) {
 				console.log('[E]', '[updateOne]', `[${this.Collection.collectionName}]`, E.message, '[CATCHED]');

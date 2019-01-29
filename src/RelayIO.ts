@@ -623,18 +623,18 @@ export class RelayIO extends WorkerProcess {
 		}
 
 		this.channelCol.save(ch).then((Channel) => {
-			if (!Channel) {
-				console.log(LOGTAG.WARN, "[playerCreateChannel]", "No channel returned after save", Channel);
-				return;
-			}
+			// if (!Channel) {
+			// 	console.log(LOGTAG.WARN, "[playerCreateChannel]", "No channel returned after save", Channel);
+			// 	return;
+			// }
 			RelayIO.Channels.set(chName, ch);
-			console.log(LOGTAG.DEBUG, "[playerCreateChannel]", `Channel ${Channel._id} added and saved!`);
+			console.log(LOGTAG.DEBUG, "[playerCreateChannel]", `Channel ${ch._id} added and saved!`);
 			Player.channels.push(chName);
 
 			ws.send(JSON.stringify({ event: GI_EVENT.PLAYER_RESPONSE_SUCCESS, payload: Player, subject: chName, successCode: "RELAY_CREATE_SUCCESS" }));
 			if (Player.saveSettings) {
 				return this.playerCol.save(Player).then((P) => {
-					console.log(LOGTAG.DEBUG, "[playerCreateChannel]", `Player ${P.name} successfully joined ${Channel._id} and settings saved!`);
+					console.log(LOGTAG.DEBUG, "[playerCreateChannel]", `Player ${P.name} successfully joined ${ch._id} and settings saved!`);
 				});
 			}
 
