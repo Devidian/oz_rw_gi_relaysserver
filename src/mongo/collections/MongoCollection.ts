@@ -235,7 +235,7 @@ export class MongoCollection<TC extends GeneralObject> {
 		if (!this.Collection) {
 			return Promise.reject('No Collection set!');
 		}
-		this.Collection.updateOne(filter, update, options || { upsert: true, j: true }).then(r => {
+		return this.Collection.updateOne(filter, update, options || { upsert: true, j: true }).then(r => {
 			!cfg.log.debug ? null : console.log(LOGTAG.DEV, "Executing findOne", r.upsertedId);
 			return this.Collection.findOne(filter);
 		}).catch((E) => {
