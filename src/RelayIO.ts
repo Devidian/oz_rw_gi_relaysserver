@@ -321,12 +321,11 @@ export class RelayIO extends WorkerProcess {
 							const AvatarURL = "https://api.adorable.io/avatars/128/" + Message.playerUID;
 							const WHO: WebhookMessageOptions = {
 								username: Message.playerName,
-								avatarURL: AvatarURL,
-								file: {
-									attachment: Message.attachment ,
-									name: "Screenshot"
-								}
+								avatarURL: AvatarURL
 							};
+							if(Message.attachment){
+								WHO.file = Message.attachment;
+							}
 							WH.sendMessage(Message.chatContent, WHO);
 						}).catch(e => {
 							console.log(LOGTAG.ERROR, e);
