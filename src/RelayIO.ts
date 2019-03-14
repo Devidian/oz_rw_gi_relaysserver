@@ -43,7 +43,8 @@ interface ChatMessage {
 	playerUID: string,  // should be (long) number but thats too long for JavaScript right now...
 	sourceName: string,
 	sourceIP: string,
-	sourceVersion: string
+	sourceVersion: string,
+	attachment: string	// base64 encoded image
 }
 
 interface PlayerMessage {
@@ -127,6 +128,7 @@ export class RelayIO extends WorkerProcess {
 
 	constructor() {
 		super();
+		this.timer = setTimeout(_ => { this.run(); }, 200);
 		this.run();
 	}
 
@@ -137,7 +139,7 @@ export class RelayIO extends WorkerProcess {
      * @memberof RelayIO
      */
 	protected run(): void {
-		this.timer = setTimeout(_ => { this.run(); }, 200);
+		this.timer.refresh();
 	}
 
     /**
@@ -171,6 +173,13 @@ export class RelayIO extends WorkerProcess {
 		return Promise.resolve(true);
 	}
 
+	/**
+	 *
+	 *
+	 * @protected
+	 * @returns {void}
+	 * @memberof RelayIO
+	 */
 	protected setupDiscordBot(): void {
 		if (!cfg.discord || !cfg.discord.enabled) {
 			!cfg.log.info ? null : console.log(LOGTAG.INFO, "[RelayIO:setupDiscordBot]", `Discord not enabled.`);
@@ -215,7 +224,8 @@ export class RelayIO extends WorkerProcess {
 					playerUID: msg.author.id,
 					sourceName: "Discord",
 					sourceIP: null,
-					sourceVersion: null
+					sourceVersion: null,
+					attachment: null
 				};
 				this.sendBCMessageToRisingWorld(ChatMessage, ChatMessage.sourceName);
 			});
@@ -311,7 +321,11 @@ export class RelayIO extends WorkerProcess {
 							const AvatarURL = "https://api.adorable.io/avatars/128/" + Message.playerUID;
 							const WHO: WebhookMessageOptions = {
 								username: Message.playerName,
-								avatarURL: AvatarURL
+								avatarURL: AvatarURL,
+								file: {
+									attachment: Message.attachment ,
+									name: "Screenshot"
+								}
 							};
 							WH.sendMessage(Message.chatContent, WHO);
 						}).catch(e => {
