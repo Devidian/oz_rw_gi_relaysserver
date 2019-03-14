@@ -323,8 +323,8 @@ export class RelayIO extends WorkerProcess {
 								username: Message.playerName,
 								avatarURL: AvatarURL
 							};
-							if(Message.attachment){
-								WHO.file = Message.attachment;
+							if (Message.attachment) {
+								WHO.file = new Attachment(Message.attachment, "screenshot.png");
 							}
 							WH.sendMessage(Message.chatContent, WHO);
 						}).catch(e => {
