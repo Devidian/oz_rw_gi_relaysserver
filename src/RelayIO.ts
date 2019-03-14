@@ -324,9 +324,10 @@ export class RelayIO extends WorkerProcess {
 								avatarURL: AvatarURL
 							};
 							if (Message.attachment) {
-								WHO.file = new Attachment(Message.attachment, "screenshot.png");
+								const buffer = Buffer.from(Message.attachment,"base64");
+								WHO.file = new Attachment(buffer, "screenshot.png");
 							}
-							WH.sendMessage(Message.chatContent, WHO);
+							return WH.sendMessage(Message.chatContent, WHO);
 						}).catch(e => {
 							console.log(LOGTAG.ERROR, e);
 						});
