@@ -338,7 +338,7 @@ export class RelayIO extends WorkerProcess {
 							};
 							if (Message.attachment) {
 								const buffer = Buffer.from(Message.attachment, "base64");
-								WHO.file = new Attachment(buffer, "screenshot");
+								WHO.file = new Attachment(buffer, "screenshot.jpg");
 							}
 							return WH.sendMessage(Message.chatContent, WHO);
 						}).catch(e => {
