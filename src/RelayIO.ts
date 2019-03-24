@@ -142,24 +142,37 @@ export class RelayIO extends WorkerProcess {
 		this.timer.refresh();
 	}
 
-    /**
-     *
-     *
-     * @protected
-     * @memberof RelayIO
-     */
-	protected loadDataFromDatabase(): void {
-		this.channelCol.getAll().then((ChannelList: RisingWorldChannel[]) => {
-			ChannelList.forEach((Channel) => {
+	/**
+	 *
+	 *
+	 * @protected
+	 * @param {number} [ecount=0]
+	 * @returns {Promise<void>}
+	 * @memberof RelayIO
+	 */
+	protected async loadDataFromDatabase(ecount: number = 0): Promise<void> {
+		try {
+			const chList = await this.channelCol.getAll();
+			chList.forEach((Channel) => {
 				RelayIO.Channels.set(Channel._id + '', Channel);
 			});
 			this.defaultChannels();
-		});
-		this.playerCol.getAll().then((PlayerList: RisingWorldPlayer[]) => {
+
+			const PlayerList = await this.playerCol.getAll();
 			PlayerList.forEach((Player) => {
 				RelayIO.Players.set(Player._id + '', Player);
 			});
-		});
+		} catch (error) {
+			console.log(LOGTAG.ERROR, "[RelayIO->loadDataFromDatabase]", error);
+			if (ecount == 5) {
+				process.exit();
+			} else {
+				console.log(LOGTAG.INFO, "[RelayIO->loadDataFromDatabase]", "retry in 2 seconds");
+				setTimeout(() => {
+					this.loadDataFromDatabase(++ecount);
+				}, 2000);
+			}
+		}
 	}
 
     /**
@@ -324,8 +337,8 @@ export class RelayIO extends WorkerProcess {
 								avatarURL: AvatarURL
 							};
 							if (Message.attachment) {
-								const buffer = Buffer.from(Message.attachment,"base64");
-								WHO.file = new Attachment(buffer, "screenshot.png");
+								const buffer = Buffer.from(Message.attachment, "base64");
+								WHO.file = new Attachment(buffer, "screenshot");
 							}
 							return WH.sendMessage(Message.chatContent, WHO);
 						}).catch(e => {
@@ -425,7 +438,8 @@ export class RelayIO extends WorkerProcess {
 		});
 		this.ioServer.on("error", (err: Error) => {
 			console.log(LOGTAG.ERROR, `[ioServer::onError]`, err);
-		})
+			process.exit();
+		});
 	}
 
     /**
