@@ -1,4 +1,4 @@
-import { MongoApp } from "./mongo/MongoApp"
+import { MongoApp } from "./MongoApp"
 /**
  *
  *

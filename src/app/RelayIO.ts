@@ -1,15 +1,13 @@
-import { Client, TextChannel, Guild, GuildChannel, MessageOptions, Attachment, RichEmbed, WebhookMessageOptions } from "discord.js";
+import { createHmac } from "crypto";
+import { Client, Guild, GuildChannel, TextChannel, WebhookMessageOptions, MessageAttachment } from "discord.js";
 import { ClientRequest, IncomingMessage } from "http";
+import * as jdenticon from "jdenticon";
 import * as WebSocket from "ws";
 import { Server } from "ws";
-import { cfg, LOGTAG } from "./config";
+import { RisingWorldChannel } from "./models/rising-world-channel/rising-world-channel";
+import { RisingWorldPlayer } from "./models/rising-world-player/rising-world-player";
 import { WorkerProcess } from "./WorkerProcess";
-import * as jdenticon from "jdenticon";
-import { PlayerCollection } from "./mongo/collections/PlayerCollection";
-import { ChannelCollection } from "./mongo/collections/ChannelCollection";
-import { RisingWorldPlayer, EmptyPlayer } from "./mongo/models/RisingWorldPlayer";
-import { RisingWorldChannel, defaultChannel } from "./mongo/models/RisingWorldChannel";
-import { createHmac } from "crypto";
+import { MongoCollection, Logger, Loglevel } from "../util";
 
 enum GI_EVENT {
 	BC_MESSAGE = "broadcastMessage",
@@ -123,8 +121,8 @@ export class RelayIO extends WorkerProcess {
 	protected static PlayerOrigins: Map<string, AdvancedWebSocket> = new Map<string, AdvancedWebSocket>();
 
 	// Collections
-	protected playerCol: PlayerCollection = null;
-	protected channelCol: ChannelCollection = null;
+	protected playerCol: MongoCollection<RisingWorldPlayer> = null;
+	protected channelCol: MongoCollection<RisingWorldChannel> = null;
 
 	constructor() {
 		super();
@@ -163,11 +161,11 @@ export class RelayIO extends WorkerProcess {
 				RelayIO.Players.set(Player._id + '', Player);
 			});
 		} catch (error) {
-			console.log(LOGTAG.ERROR, "[RelayIO->loadDataFromDatabase]", error);
+			Logger(Loglevel.ERROR, "[RelayIO->loadDataFromDatabase]", error);
 			if (ecount == 5) {
 				process.exit();
 			} else {
-				console.log(LOGTAG.INFO, "[RelayIO->loadDataFromDatabase]", "retry in 2 seconds");
+				Logger(Loglevel.INFO, "[RelayIO->loadDataFromDatabase]", "retry in 2 seconds");
 				setTimeout(() => {
 					this.loadDataFromDatabase(++ecount);
 				}, 2000);
@@ -194,13 +192,13 @@ export class RelayIO extends WorkerProcess {
 	 * @memberof RelayIO
 	 */
 	protected setupDiscordBot(): void {
-		if (!cfg.discord || !cfg.discord.enabled) {
-			!cfg.log.info ? null : console.log(LOGTAG.INFO, "[RelayIO:setupDiscordBot]", `Discord not enabled.`);
+		if (!process.env.DISCORD_ENABLED) {
+			Logger(Loglevel.INFO, "[RelayIO:setupDiscordBot]", `Discord not enabled.`);
 			return;
 		} else {
 			this.DiscordBot = new Client();
 			this.DiscordBot.on('ready', () => {
-				!cfg.log.info ? null : console.log(LOGTAG.INFO, "[RelayIO:setupDiscordBot]", `Logged in as ${this.DiscordBot.user.tag}!`);
+				Logger(Loglevel.INFO, "[RelayIO:setupDiscordBot]", `Logged in as ${this.DiscordBot.user.tag}!`);
 				// const DebugMessage: ChatMessage = {
 				//     chatChannel: "global",
 				//     chatContent: "Debug test",
@@ -243,9 +241,9 @@ export class RelayIO extends WorkerProcess {
 				this.sendBCMessageToRisingWorld(ChatMessage, ChatMessage.sourceName);
 			});
 			this.DiscordBot.on("error", (e: Error) => {
-				console.log(LOGTAG.ERROR, "[DiscordBot.onError]", e);
+				Logger(Loglevel.ERROR, "[DiscordBot.onError]", e);
 			});
-			this.DiscordBot.login(cfg.discord.token);
+			this.DiscordBot.login(process.env.DISCORD_TOKEN);
 		}
 	}
 
@@ -295,7 +293,7 @@ export class RelayIO extends WorkerProcess {
      * @memberof RelayIO
      */
 	protected sendBCMessageToRisingWorld(Message: ChatMessage, source: string = "unknown"): void {
-		!cfg.log.info ? null : console.log(LOGTAG.INFO, `[ws::sendBCMessageToRisingWorld]`, `Got BC message from <ID:${source}>, sending to <${this.ioServer.clients.size}> clients`);
+		Logger(Loglevel.INFO, `[ws::sendBCMessageToRisingWorld]`, `Got BC message from <ID:${source}>, sending to <${this.ioServer.clients.size}> clients`);
 		this.ioServer.clients.forEach((clientWS) => {
 			!(clientWS.readyState === WebSocket.OPEN) ? null : clientWS.send(JSON.stringify({ event: GI_EVENT.BC_MESSAGE, payload: Message }));
 		});
@@ -309,11 +307,11 @@ export class RelayIO extends WorkerProcess {
      * @memberof RelayIO
      */
 	protected sendBCMessageToDiscord(Message: ChatMessage): void {
-		if (this.DiscordBot && this.DiscordBot.status === 0) {
+		if (this.DiscordBot && this.DiscordBot.uptime > 0) {
 
 			// this.DiscordBot.channels.find("name", Message.chatChannel)
-			this.DiscordBot.guilds.forEach((Guild: Guild) => {
-				Guild.channels.filter((gc) => gc.name == Message.chatChannel).forEach((GC: GuildChannel) => {
+			this.DiscordBot.guilds.cache.forEach((Guild: Guild) => {
+				Guild.channels.cache.filter((gc) => gc.name == Message.chatChannel).forEach((GC: GuildChannel) => {
 					if (GC.type == "text") {
 						// const embed = new RichEmbed();
 						const TC: TextChannel = (GC as TextChannel);
@@ -322,10 +320,11 @@ export class RelayIO extends WorkerProcess {
 						TC.fetchWebhooks().then((WHC) => {
 							const WH = WHC.filter((wh) => wh.name === WebHookName).first();
 							if (!WH) {
-								// !cfg.log.debug ? null : console.log(LOGTAG.DEBUG, "[sendBCMessageToDiscord]", `creating web-hook ${WebHookName}`);
-								return TC.createWebhook(WebHookName, jdenticon.toPng(process.hrtime().join("#"), 256));
+								// Logger(Loglevel.DEBUG, "[sendBCMessageToDiscord]", `creating web-hook ${WebHookName}`);
+								const avatar = jdenticon.toPng(process.hrtime().join("#"), 256);
+								return TC.createWebhook(WebHookName, { avatar });
 							} else {
-								// !cfg.log.debug ? null : console.log(LOGTAG.DEBUG, "[sendBCMessageToDiscord]", `web-hook ${WebHookName} found`);
+								// Logger(Loglevel.DEBUG, "[sendBCMessageToDiscord]", `web-hook ${WebHookName} found`);
 								return WH;
 							}
 						}).then((WH) => {
@@ -334,15 +333,17 @@ export class RelayIO extends WorkerProcess {
 							const AvatarURL = "https://api.adorable.io/avatars/128/" + Message.playerUID;
 							const WHO: WebhookMessageOptions = {
 								username: Message.playerName,
-								avatarURL: AvatarURL
+								avatarURL: AvatarURL,
+								files: [],
+								split: {}
 							};
 							if (Message.attachment) {
 								const buffer = Buffer.from(Message.attachment, "base64");
-								WHO.file = new Attachment(buffer, "screenshot.jpg");
+								WHO.files.push(new MessageAttachment(buffer, "screenshot.jpg"));
 							}
-							return WH.sendMessage(Message.chatContent, WHO);
+							return WH.send(Message.chatContent, WHO as any);
 						}).catch(e => {
-							console.log(LOGTAG.ERROR, e);
+							Logger(Loglevel.ERROR, e);
 						});
 						// embed.setAuthor(Message.playerName);
 						// const msg: MessageOptions = {
@@ -356,7 +357,7 @@ export class RelayIO extends WorkerProcess {
 				});
 			})
 		} else {
-			!cfg.log.debug ? null : console.log("[sendBCMessageToDiscord]", `Discord status is ${this.DiscordBot.status}`);
+			Logger(Loglevel.DEBUG, "[sendBCMessageToDiscord]", `Discord uptime is ${this.DiscordBot.uptime}`);
 		}
 	}
 
@@ -367,14 +368,14 @@ export class RelayIO extends WorkerProcess {
      * @memberof RelayIO
      */
 	protected setupIOServer(): void {
-		this.ioServer = new Server({ port: cfg.relayio.port });
-		!cfg.log.info ? null : console.log(LOGTAG.INFO, "[RelayIO]", "Setting up server");
+		this.ioServer = new Server({ port: Number(process.env.APP_WSS_PORT) });
+		Logger(Loglevel.INFO, "[RelayIO]", "Setting up server");
 		this.ioServer.on('connection', (ws: AdvancedWebSocket, req: IncomingMessage) => {
 			ws.id = this.connectionIndex++;
-			!cfg.log.debug ? null : console.log(LOGTAG.DEBUG, "[RelayIO]", `Client connected from <${req.headers['x-forwarded-for'] || req.connection.remoteAddress}> <ID:${ws.id}>`);
+			Logger(Loglevel.DEBUG, "[RelayIO]", `Client connected from <${req.headers['x-forwarded-for'] || req.connection.remoteAddress}> <ID:${ws.id}>`);
 			ws.on("message", (message: any) => {
 				let decodedMessage: GIMessage = JSON.parse(message);
-				// !cfg.log.debug ? null : console.log(LOGTAG.DEV, `[ws::onMessage]`, message, decodedMessage);
+				// Logger(Loglevel.DEBUG, LOGTAG.DEV, `[ws::onMessage]`, message, decodedMessage);
 				switch (decodedMessage.event) {
 					case GI_EVENT.BC_MESSAGE:
 						this.broadcastMessage(decodedMessage.payload, ws);
@@ -407,37 +408,37 @@ export class RelayIO extends WorkerProcess {
 						this.playerOffline(ws, decodedMessage.payload);
 						break;
 					default:
-						!cfg.log.warn ? null : console.log(LOGTAG.WARN, `[ws::onMessage]`, `Unknown message event <${decodedMessage.event}> from <ID:${ws.id}>`);
+						Logger(Loglevel.WARNING, `[ws::onMessage]`, `Unknown message event <${decodedMessage.event}> from <ID:${ws.id}>`);
 						break;
 				}
 			});
 			ws.on("error", (err: Error) => {
-				!cfg.log.debug ? null : console.log(LOGTAG.DEBUG, `[ws::onError]`, err);
+				Logger(Loglevel.DEBUG, `[ws::onError]`, err);
 			});
 			ws.on("unexpected-response", (req: ClientRequest, response: IncomingMessage) => {
-				!cfg.log.debug ? null : console.log(LOGTAG.DEBUG, '[ws:ur]', req, response);
+				Logger(Loglevel.DEBUG, '[ws:ur]', req, response);
 			});
 			ws.on("close", (code, reason) => {
-				!cfg.log.debug ? null : console.log(LOGTAG.DEBUG, '[ws:close]', `Client <ID:${ws.id}> disconnected, Code: <${code}> Reason: <${reason}>`);
+				Logger(Loglevel.DEBUG, '[ws:close]', `Client <ID:${ws.id}> disconnected, Code: <${code}> Reason: <${reason}>`);
 			});
 			ws.on("open", () => {
-				!cfg.log.debug ? null : console.log(LOGTAG.DEBUG, "[ws:open]");
+				Logger(Loglevel.DEBUG, "[ws:open]");
 			});
 			ws.on("ping", (data) => {
-				!cfg.log.debug ? null : console.log(LOGTAG.DEBUG, "[ws:ping]", data);
+				Logger(Loglevel.DEBUG, "[ws:ping]", data);
 			});
 			ws.on("pong", (data) => {
-				!cfg.log.debug ? null : console.log(LOGTAG.DEBUG, "[ws:pong]", data);
+				Logger(Loglevel.DEBUG, "[ws:pong]", data);
 			});
 
 			ws.on("upgrade", (response: IncomingMessage) => {
-				!cfg.log.debug ? null : console.log(LOGTAG.DEBUG, "[ws:upgrade]", response);
+				Logger(Loglevel.DEBUG, "[ws:upgrade]", response);
 			});
 			// ws.send(JSON.stringify({ tag: "HelloWorld" }));
 			// ws.send('something');
 		});
 		this.ioServer.on("error", (err: Error) => {
-			console.log(LOGTAG.ERROR, `[ioServer::onError]`, err);
+			Logger(Loglevel.ERROR, `[ioServer::onError]`, err);
 			process.exit();
 		});
 	}
@@ -468,7 +469,7 @@ export class RelayIO extends WorkerProcess {
 
 			// Save changes
 			this.playerCol.save(Player).then((P) => {
-				console.log(LOGTAG.DEBUG, "[registerPlayer]", `Player ${data.playerName} successfully registred and saved!`);
+				Logger(Loglevel.DEBUG, "[registerPlayer]", `Player ${data.playerName} successfully registred and saved!`);
 			}).catch(e => console.log);
 		}
 	}
@@ -512,7 +513,7 @@ export class RelayIO extends WorkerProcess {
 
 			// Save changes
 			this.playerCol.hardRemove({ _id: Player._id }).then((r) => {
-				console.log(LOGTAG.DEBUG, "[registerPlayer]", `Player ${data.playerName} successfully unregistred and deleted!`);
+				Logger(Loglevel.DEBUG, "[registerPlayer]", `Player ${data.playerName} successfully unregistred and deleted!`);
 			}).catch(e => console.log);
 		}
 	}
@@ -534,14 +535,14 @@ export class RelayIO extends WorkerProcess {
 		const Player: RisingWorldPlayer = RelayIO.Players.get(data.playerUID);
 
 		if (!RelayIO.Channels.has(data.channel)) {
-			!cfg.log.debug ? null : console.log(LOGTAG.DEBUG, "[playerJoinChannel]", `Player ${Player.name} tried to join unknown channel ${data.channel}!`);
+			Logger(Loglevel.DEBUG, "[playerJoinChannel]", `Player ${Player.name} tried to join unknown channel ${data.channel}!`);
 			ws.send(JSON.stringify({ event: GI_EVENT.PLAYER_RESPONSE_ERROR, payload: Player, subject: data.channel, errorCode: "RELAY_CHANNEL_UNKNOWN" }));
 			return;
 		}
 
 		const Channel: RisingWorldChannel = RelayIO.Channels.get(data.channel);
 
-		const secret = cfg.db.idSecret || "d3f4ul753cR3T";
+		const secret = process.env.SALT || "d3f4ul753cR3T";
 		const hash = Channel.secure ? createHmac('sha256', secret).update(data.password).digest('hex') : null;
 
 		if (!Channel.secure || Channel.secure && Channel.password == hash) {
@@ -551,7 +552,7 @@ export class RelayIO extends WorkerProcess {
 				if (Player.saveSettings) {
 					// Save changes
 					this.playerCol.save(Player).then((P) => {
-						!cfg.log.debug ? null : console.log(LOGTAG.DEBUG, "[playerJoinChannel]", `Player ${P.name} successfully joined ${Channel._id} and settings saved!`);
+						Logger(Loglevel.DEBUG, "[playerJoinChannel]", `Player ${P.name} successfully joined ${Channel._id} and settings saved!`);
 					}).catch(e => console.log);
 				}
 			}
@@ -597,7 +598,7 @@ export class RelayIO extends WorkerProcess {
 			if (Player.saveSettings) {
 				// Save changes
 				this.playerCol.save(Player).then((P) => {
-					console.log(LOGTAG.DEBUG, "[playerLeaveChannel]", `Player ${P.name} successfully left ${Channel._id} and settings saved!`);
+					Logger(Loglevel.DEBUG, "[playerLeaveChannel]", `Player ${P.name} successfully left ${Channel._id} and settings saved!`);
 				}).catch(e => console.log);
 			}
 			ws.send(JSON.stringify({ event: GI_EVENT.PLAYER_RESPONSE_SUCCESS, payload: Player, subject: data.channel, successCode: "RELAY_LEAVE_SUCCESS" }));
@@ -642,10 +643,10 @@ export class RelayIO extends WorkerProcess {
 			return;
 		}
 
-		const ch: RisingWorldChannel = Object.assign({}, defaultChannel, { _id: chName, description: "Channel created by " + Player.name });
+		const ch: RisingWorldChannel = Object.assign({}, RisingWorldChannel.emptyChannel, { _id: chName, description: "Channel created by " + Player.name });
 		ch.ownerId = Player._id;
 		if (chPass) {
-			const secret = cfg.db.idSecret || "d3f4ul753cR3T";
+			const secret = process.env.SALT || "d3f4ul753cR3T";
 			ch.secure = true;
 			ch.password = createHmac('sha256', secret).update(chPass).digest('hex');
 		}
@@ -656,18 +657,18 @@ export class RelayIO extends WorkerProcess {
 			// 	return;
 			// }
 			RelayIO.Channels.set(chName, ch);
-			console.log(LOGTAG.DEBUG, "[playerCreateChannel]", `Channel ${ch._id} added and saved!`);
+			Logger(Loglevel.DEBUG, "[playerCreateChannel]", `Channel ${ch._id} added and saved!`);
 			Player.channels.push(chName);
 
 			ws.send(JSON.stringify({ event: GI_EVENT.PLAYER_RESPONSE_SUCCESS, payload: Player, subject: chName, successCode: "RELAY_CREATE_SUCCESS" }));
 			if (Player.saveSettings) {
 				return this.playerCol.save(Player).then((P) => {
-					console.log(LOGTAG.DEBUG, "[playerCreateChannel]", `Player ${P.name} successfully joined ${ch._id} and settings saved!`);
+					Logger(Loglevel.DEBUG, "[playerCreateChannel]", `Player ${P.name} successfully joined ${ch._id} and settings saved!`);
 				});
 			}
 
 		}).catch(e => {
-			console.log(LOGTAG.ERROR, "[playerCreateChannel]", e);
+			Logger(Loglevel.ERROR, "[playerCreateChannel]", e);
 		});
 	}
 
@@ -705,7 +706,7 @@ export class RelayIO extends WorkerProcess {
 						OtherPlayer.channels.splice(OtherPlayer.channels.indexOf(Channel._id), 1);
 						if (OtherPlayer.saveSettings) {
 							this.playerCol.save(OtherPlayer).then((P) => {
-								console.log(LOGTAG.DEBUG, "[playerCloseChannel]", `Player ${P.name} successfully left ${Channel._id} because it was closed!`);
+								Logger(Loglevel.DEBUG, "[playerCloseChannel]", `Player ${P.name} successfully left ${Channel._id} because it was closed!`);
 							}).catch(e => console.log);
 						}
 						if (OtherPlayer.online) {
@@ -717,7 +718,7 @@ export class RelayIO extends WorkerProcess {
 					}
 				});
 			} else {
-				console.log(LOGTAG.ERROR, `Channel ${Channel._id} could not be deleted from database`);
+				Logger(Loglevel.ERROR, `Channel ${Channel._id} could not be deleted from database`);
 			}
 		}).catch(e => console.log);
 	}
@@ -735,7 +736,7 @@ export class RelayIO extends WorkerProcess {
 		Player.override = data.override;
 		ws.send(JSON.stringify({ event: GI_EVENT.PLAYER_OVERRIDE_CHANGE, subject: Player.override, payload: Player }));
 		this.playerCol.save(Player).then((P) => {
-			console.log(LOGTAG.DEBUG, "[playerOverrideChange]", `Player ${P.name} cahnged override and settings saved!`);
+			Logger(Loglevel.DEBUG, "[playerOverrideChange]", `Player ${P.name} cahnged override and settings saved!`);
 		}).catch(e => console.log);
 	}
 
@@ -758,7 +759,7 @@ export class RelayIO extends WorkerProcess {
 			Player.online = false;
 			if (Player.saveSettings) {
 				this.playerCol.save(Player).then((P) => {
-					console.log(LOGTAG.DEBUG, "[playerOffline]", `Player ${P.name} is now offline and settings saved!`);
+					Logger(Loglevel.DEBUG, "[playerOffline]", `Player ${P.name} is now offline and settings saved!`);
 				}).catch(e => console.log);
 			}
 		}
@@ -778,7 +779,7 @@ export class RelayIO extends WorkerProcess {
 		RelayIO.PlayerOrigins.set(data.playerUID, ws); // used for direct messages in future and for updates on channels like close, kick or ban
 		if (Player.saveSettings) {
 			this.playerCol.save(Player).then((P) => {
-				console.log(LOGTAG.DEBUG, "[playerOnline]", `Player ${P.name} is now online and settings saved!`);
+				Logger(Loglevel.DEBUG, "[playerOnline]", `Player ${P.name} is now online and settings saved!`);
 			}).catch(e => console.log);
 		}
 		ws.send(JSON.stringify({ event: GI_EVENT.PLAYER_ONLINE, payload: Player }));
@@ -795,7 +796,7 @@ export class RelayIO extends WorkerProcess {
      */
 	protected getPlayer(id: string, name: string): RisingWorldPlayer {
 		if (!RelayIO.Players.has(id)) {
-			const anonymousPlayer: RisingWorldPlayer = Object.assign({}, EmptyPlayer, { _id: id, id64: id, name: name });
+			const anonymousPlayer: RisingWorldPlayer = Object.assign({}, RisingWorldPlayer.emptyPlayer, { _id: id, id64: id, name: name });
 			RelayIO.Players.set(id, anonymousPlayer);
 		}
 		return RelayIO.Players.get(id);
@@ -811,10 +812,10 @@ export class RelayIO extends WorkerProcess {
 		const defaultChannels: string[] = ['global', 'global-dev', 'global-de', 'global-en', 'global-ru', 'global-fr'];
 		defaultChannels.forEach((chName) => {
 			if (!RelayIO.Channels.has(chName)) {
-				const ch: RisingWorldChannel = Object.assign({}, defaultChannel, { _id: chName, description: "default channel" });
+				const ch: RisingWorldChannel = Object.assign({}, RisingWorldChannel.emptyChannel, { _id: chName, description: "default channel" });
 				RelayIO.Channels.set(chName, ch);
 				this.channelCol.save(ch).then(Channel => {
-					console.log(LOGTAG.DEBUG, "[defaultChannels]", `Channel ${Channel._id} added and saved!`);
+					Logger(Loglevel.DEBUG, "[defaultChannels]", `Channel ${Channel._id} added and saved!`);
 				}).catch(e => console.log);
 			}
 		});
@@ -826,9 +827,9 @@ export class RelayIO extends WorkerProcess {
      * @protected
      * @memberof RelayIO
      */
-	protected mongoAfterConnect(): void {
-		this.playerCol = new PlayerCollection(this.MongoDatabase);
-		this.channelCol = new ChannelCollection(this.MongoDatabase);
+	protected async mongoAfterConnect(): Promise<void> {
+		this.playerCol = (await import("./models/rising-world-player/rising-world-player.collection")).playerCollection;
+		this.channelCol = (await import("./models/rising-world-channel/rising-world-channel.collection")).channelCollection;
 
 		super.mongoAfterConnect();
 

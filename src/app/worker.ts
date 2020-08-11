@@ -1,6 +1,7 @@
+require('dotenv').config();
+import { Logger, Loglevel } from '../util';
 import { RelayIO } from './RelayIO';
 import { WorkerProcess } from './WorkerProcess';
-import { cfg, LOGTAG } from './config';
 
 
 const processType = process.argv.pop();
@@ -11,7 +12,7 @@ switch (processType) {
 		Application = new RelayIO();
 		break;
 	default:
-		!cfg.log.warn ? null : console.log(LOGTAG.WARN, "[worker]", 'Invalid module');
+		Logger(Loglevel.ERROR, "worker", `Invalid module ${processType}`);
 		break;
 }
 
@@ -25,7 +26,7 @@ if (Application) {
 				break;
 
 			default:
-				console.log(LOGTAG.ERROR, "[worker]", `Invalid message ${msg}`);
+				Logger(Loglevel.ERROR, "worker", `Invalid message ${msg}`);
 				break;
 		}
 	});

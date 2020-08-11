@@ -2,8 +2,8 @@
 Description=OZ Global Intercom Relay Server Unit
 
 [Service]
-ExecStart=/usr/bin/nodejs /srv/apps/oz_rw_gi_relaysserver/bin/main.js
-ExecReload=/usr/bin/nodejs /srv/apps/oz_rw_gi_relaysserver/bin/app-cli.js REBOOT
+ExecStart=/usr/bin/nodejs /srv/apps/oz_rw_gi_relaysserver/dist/app.js
+ExecReload=/usr/bin/nodejs /srv/apps/oz_rw_gi_relaysserver/dist/app-cli.js REBOOT
 Restart=always
 StandardOutput=syslog
 StandardError=syslog

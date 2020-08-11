@@ -1,9 +1,9 @@
 'use strict';
 import { ChildProcess, fork } from 'child_process';
 
-import { cfg, LOGTAG } from './config';
 import { watch as watchFS } from 'fs';
 import { Server } from 'ws';
+import { Logger, Loglevel } from '../util';
 
 /**
  *
@@ -36,7 +36,7 @@ export class Master {
 				let parts = f.split('.');
 				let name = parts.shift().toLowerCase();
 				if (this.workerList.has(name) && (!this.flagWatchFile.has(name) || !this.flagWatchFile.get(name))) {
-					!cfg.log.debug ? null : console.log(LOGTAG.DEBUG, '[Master]', '[watchFS]', `restarting worker ${name} due to file changes`);
+					Logger(Loglevel.DEBUG, '[Master]', '[watchFS]', `restarting worker ${name} due to file changes`);
 					this.workerList.get(name).send("reboot");
 					this.flagWatchFile.set(name, true);
 				}
@@ -64,27 +64,27 @@ export class Master {
 				this.flagWatchFile.set(type, false);
 			}
 			if (this.flagReboot) {
-				!cfg.log.info ? null : console.log(LOGTAG.INFO, '[Master]', `Worker[${W.pid}/${type}]: exited (reboot)`);
+				Logger(Loglevel.INFO, '[Master]', `Worker[${W.pid}/${type}]: exited (reboot)`);
 				if (this.workerList.size < 1) {
-					!cfg.log.info ? null : console.log(LOGTAG.INFO, '[Master]', `All worker shut down, exit now for reboot`);
+					Logger(Loglevel.INFO, '[Master]', `All worker shut down, exit now for reboot`);
 					this.cleanExit();
 				}
 			} else {
-				!cfg.log.warn ? null : console.log(LOGTAG.WARN, '[Master]', `Worker[${W.pid}/${type}]: exited`);
+				Logger(Loglevel.WARNING, '[Master]', `Worker[${W.pid}/${type}]: exited`);
 				this.bootWorker(type);
 			}
 		});
 
 		W.on("close", (c: number, s: string) => {
-			!cfg.log.warn ? null : console.log(LOGTAG.WARN, '[Master]', `Worker[${W.pid}/${type}]: closed`);
+			Logger(Loglevel.WARNING, '[Master]', `Worker[${W.pid}/${type}]: closed`);
 		}).on("disconnect", () => {
-			!cfg.log.warn ? null : console.log(LOGTAG.WARN, '[Master]', `Worker[${W.pid}/${type}]: disconnected`);
+			Logger(Loglevel.WARNING, '[Master]', `Worker[${W.pid}/${type}]: disconnected`);
 		}).on("error", (e: Error) => {
-			!cfg.log.warn ? null : console.log(LOGTAG.WARN, '[Master]', `Worker[${W.pid}/${type}]: error ${e.toString()}`);
+			Logger(Loglevel.WARNING, '[Master]', `Worker[${W.pid}/${type}]: error ${e.toString()}`);
 		}).on("message", (msg: any) => {
 			if (msg.type == "ABC") {
 			} else {
-				!cfg.log.debug ? null : console.log(LOGTAG.DEBUG, '[Master]', `Worker[${W.pid}/${type}]:`, msg);
+				Logger(Loglevel.DEBUG, '[Master]', `Worker[${W.pid}/${type}]:`, msg);
 			}
 		});
 
@@ -98,7 +98,7 @@ export class Master {
 	 * @memberof Master
 	 */
 	protected setupIOServer() {
-		this.ioServer = new Server({ port: cfg.master.ioport });
+		this.ioServer = new Server({ port: Number(process.env.APP_CLI_PORT) });
 
 		// Command Line Interface
 		this.ioServer.on('connection', (ws) => {

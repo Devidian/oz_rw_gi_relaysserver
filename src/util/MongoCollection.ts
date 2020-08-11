@@ -1,8 +1,11 @@
 import { createHmac } from "crypto";
-import { ChangeStream, ChangeStreamOptions, Collection, CommonOptions, Cursor, Db, DeleteWriteOpResultObject, FilterQuery, ObjectID, ReplaceOneOptions, UpdateWriteOpResult } from "mongodb";
+import { ChangeStream, ChangeStreamOptions, Collection, CommonOptions, Cursor, Db, DeleteWriteOpResultObject, FilterQuery, ObjectID, ReplaceOneOptions, UpdateWriteOpResult, UpdateQuery } from "mongodb";
 import { types } from "util";
-import { LOGTAG, cfg } from "../../config";
-import { GeneralObject } from "../models/GeneralObject";
+import { MongoObject } from "./interfaces/MongoObject";
+import { Logger } from "./Logger";
+import { MongoDB } from "./MongoDB";
+import { plainToClass, classToPlain } from "class-transformer";
+
 
 
 /** Help Class with general methods
@@ -10,13 +13,13 @@ import { GeneralObject } from "../models/GeneralObject";
  * @param {type} Database
  * @returns {MongoCollection}
  */
-export class MongoCollection<TC extends GeneralObject> {
-	protected Collection: Collection;
-	protected DB: Db;
+export class MongoCollection<TC extends MongoObject> {
 	protected Options = { all: {} };
-	protected Cursor: Cursor<Object> = null;
-	protected DEFAULT_CS_OPTION: any = {
-		readPreference: "secondaryPreferred"
+	protected defaultFactory: (new (item?: TC) => TC);
+	Collection: Collection<TC>;
+
+	protected get DB(): Db {
+		return MongoDB.client?.db();
 	}
 
 	/**
@@ -24,9 +27,18 @@ export class MongoCollection<TC extends GeneralObject> {
 	 * @param {Db} Database
 	 * @memberof MongoCollection
 	 */
-	constructor(Database: Db) {
-		this.DB = Database;
+	constructor(
+		protected factories: { [key: string]: (new (item?: TC) => TC) },
+		private collectionName: string,
+		private useClassFilter: boolean = false
+	) {
+		this.Collection = this.DB?.collection<TC>(collectionName);
+		this.defaultFactory = factories[Object.getOwnPropertyNames(factories)[0]];
 	};
+
+	protected dynamicClass(name: string) {
+		return this.factories[name];
+	}
 
 	/**
 	 * default save document method (override if you need somethng special)
@@ -37,17 +49,16 @@ export class MongoCollection<TC extends GeneralObject> {
 	 *
 	 * @memberof MongoDB
 	 */
-	public save(doc: TC): Promise<TC> {
+	public save(doc: TC): Promise<TC | null> {
 		const N = new Date();
 		// ensure ObjectID
 		doc._id = ObjectID.isValid(doc._id) && new ObjectID(doc._id + "") + '' == doc._id + '' ? new ObjectID(doc._id + "") : doc._id; // in case of a valid object id that was incorrectly string, convert it
 		if (!doc._id) {
 			doc._id = new ObjectID();
 		}
-		doc.createdOn = doc.createdOn || N; // set createdOn if not set
-		// doc.lastModifiedOn = N; // will be set in atomicSave
+		doc.createdOn = doc.createdOn || N;
 
-		return this.atomicSave(doc);
+		return this.atomicSave({ ...doc, className: doc.className });
 	};
 
 	/**
@@ -58,8 +69,10 @@ export class MongoCollection<TC extends GeneralObject> {
 	 * @memberof MongoCollection
 	 */
 	public softRemove(Filter: FilterQuery<TC>): Promise<UpdateWriteOpResult> {
+
 		const now = new Date();
-		return this.Collection.updateMany(Filter, { $set: { removedOn: now } });
+		const uq: UpdateQuery<TC> = { $set: { removedOn: now } } as any;
+		return this.Collection.updateMany(Filter, uq);
 	}
 
 	/**
@@ -70,7 +83,7 @@ export class MongoCollection<TC extends GeneralObject> {
 	 * @memberof MongoCollection
 	 */
 	public restore(Filter: FilterQuery<TC>): Promise<UpdateWriteOpResult> {
-		return this.Collection.updateMany(Filter, { $unset: { removedOn: 1 } });
+		return this.Collection.updateMany(Filter, { $unset: { removedOn: 1 } } as any);
 	}
 
 	/**
@@ -89,21 +102,21 @@ export class MongoCollection<TC extends GeneralObject> {
 	 *
 	 * @protected
 	 * @param {string} key
-	 * @param {Object} nDoc
-	 * @param {Object} oDoc
+	 * @param {{ [key: string]: any }} nDoc
+	 * @param {{ [key: string]: any }} oDoc
 	 * @returns {any[]}
 	 * @memberof MongoCollection
 	 */
-	protected deepUpdate(key: string, nDoc: Object, oDoc: Object): any[] {
+	protected deepUpdate(key: string, nDoc: { [key: string]: any }, oDoc: { [key: string]: any }): any[] {
 		let result = [];
 		for (const prop in nDoc) {
 			try {
 				let upKey = key + '.' + prop;
 				if (nDoc.hasOwnProperty(prop)) {
-					const isObjectID = ObjectID.isValid(nDoc[prop]) && nDoc[prop].length > 12;
+					const isObjectID = ObjectID.isValid(nDoc[prop]); //  && nDoc[prop].length > 12
 					if (!oDoc || !oDoc[prop]) {
 						result.push({ path: upKey, value: nDoc[prop] });
-					} else if (isObjectID || types.isDate(nDoc[prop])) {
+					} else if (!oDoc[prop] || isObjectID || types.isDate(nDoc[prop])) {
 						// respect ObjectID an Date
 						if (oDoc[prop] != nDoc[prop]) {
 							result.push({ path: upKey, value: nDoc[prop] });
@@ -126,7 +139,7 @@ export class MongoCollection<TC extends GeneralObject> {
 					}
 				}
 			} catch (error) {
-				console.log(LOGTAG.ERROR, `[MongoCollection::deepUpdate]`, error);
+				Logger(911, `[MongoCollection::deepUpdate]`, error);
 			}
 		}
 		return result;
@@ -141,12 +154,12 @@ export class MongoCollection<TC extends GeneralObject> {
 	 * @returns {Promise<any>}
 	 * @memberof MongoCollection
 	 */
-	protected createUpdate(nDoc: any, oDoc: any): Promise<any> {
-		let target = {};
+	protected createUpdate(nDoc: { [key: string]: any }, oDoc: { [key: string]: any }): Promise<any> {
+		let target: { [key: string]: any } = {};
 		for (const key in nDoc) {
 			if (nDoc.hasOwnProperty(key)) {
-				const isObjectID = ObjectID.isValid(nDoc[key]) && nDoc[key].length > 12;
-				if (isObjectID || types.isDate(nDoc[key])) {
+				const isObjectID = ObjectID.isValid(nDoc[key]);// && nDoc[key].length > 12;
+				if (!oDoc[key] || isObjectID || types.isDate(nDoc[key])) {
 					if (oDoc[key] != nDoc[key]) {
 						target[key] = nDoc[key];
 					}
@@ -183,9 +196,9 @@ export class MongoCollection<TC extends GeneralObject> {
 	 * @returns {Promise<TC>}
 	 * @memberof MongoCollection
 	 */
-	public atomicSave(doc2save: TC): Promise<TC> {
+	public atomicSave(doc2save: TC): Promise<TC | null> {
 		// let isUpdate = false;
-		return this.getItem(doc2save._id).then((doc: TC) => {
+		return this.getItem(doc2save._id).then((doc: TC | null) => {
 			if (doc) {
 				// isUpdate = true;
 				// console.log(doc2save,doc);
@@ -196,28 +209,26 @@ export class MongoCollection<TC extends GeneralObject> {
 				return doc2save;
 			}
 		}).then((to) => {
-			var oQuery = {
+			var oQuery: FilterQuery<any> = {
 				_id: doc2save._id
 			};
 			let mod = Object.assign({}, to);
-			// console.log("[DEV]", JSON.stringify(mod));
+
 			delete mod._id;
 			delete mod.createdOn; // ignore value because its set on first save and should never change again
 			delete mod.lastModifiedOn; // ignore value because its set on save
-			// console.log("[DEV]", JSON.stringify(mod));
+			delete mod.class; // ignore value because its set on first save and should never change again
+
 			let fields = 0;
 			for (const key in mod) {
 				if (mod.hasOwnProperty(key)) {
 					fields++;
 				}
 			}
-			let SOI = Object.assign({}, oQuery, { createdOn: new Date() });
+			let SOI = Object.assign(to.class ? { class: to.class } : {}, oQuery, { createdOn: new Date() });
 			mod.lastModifiedOn = new Date();
-			// console.log("[DEV]", JSON.stringify(mod));
 
-			// console.log("[DEV]", `${fields} fields <isUpdate:${isUpdate}> changed for ${doc2save._id + ''} in ${this.Collection.collectionName}: ${JSON.stringify(mod)}`);
-			// console.log("[DEV]", JSON.stringify({ col: this.Collection.collectionName, $setOnInsert: SOI, $set: mod }));
-			return fields ? this.updateOne(oQuery, { $setOnInsert: SOI, $set: mod }, { upsert: true }) : this.getItem(doc2save._id);
+			return fields ? this.updateOne(oQuery, { $setOnInsert: SOI, $set: mod }, { upsert: true }).then(i => this.toObject(i) as TC) : this.getItem(doc2save._id);
 		});
 	}
 
@@ -231,22 +242,24 @@ export class MongoCollection<TC extends GeneralObject> {
 	 * @returns {Promise<T>}
 	 * @memberof MongoCollection
 	 */
-	public updateOne(filter: FilterQuery<TC>, update: Object, options?: ReplaceOneOptions): Promise<TC> {
+	public updateOne(filter: FilterQuery<any>, update: Object, options?: ReplaceOneOptions): Promise<TC | null> {
 		if (!this.Collection) {
 			return Promise.reject('No Collection set!');
 		}
-		return this.Collection.updateOne(filter, update, options || { upsert: true, j: true, w: "majority", wtimeout: 3000 }).then(r => {
-			// !cfg.log.debug ? null : console.log(LOGTAG.DEV, "Executing findOne", r.upsertedId);
-			return this.Collection.findOne<TC>(filter);
-		}).catch((E) => {
-			if (E.code == 11000) {
-				console.log('[E]', '[updateOne]', `[${this.Collection.collectionName}]`, E.message, '[CATCHED]');
-				return this.Collection.findOne(filter);
-			} else {
-				console.log('[E]', '[updateOne]', `[${this.Collection.collectionName}]`, E.message);
-				throw "Error on update One";
-			}
-		});
+		return this.Collection.updateOne(filter, update, options || { upsert: true })
+			// .catch((E) => {
+			// 	if (E.code == 11000) {
+			// 		Logger(911, '[updateOne]', `[${this.Collection.collectionName}]`, E.message, '[CATCHED]');
+			// 		// return true;
+			// 	} else {
+			// 		Logger(911, '[updateOne]', `[${this.Collection.collectionName}]`, E.message);
+			// 		// throw "Error on update One";
+			// 	}
+			// 	throw E;
+			// })
+			.then(() => {
+				return this.findItem(filter);
+			});
 	}
 
 	/**
@@ -273,7 +286,7 @@ export class MongoCollection<TC extends GeneralObject> {
 	 * @memberof MongoDB
 	 */
 	public countAll(): Promise<number> {
-		return this.countItems(null);
+		return this.countItems({});
 	}
 
 	/**
@@ -297,11 +310,30 @@ export class MongoCollection<TC extends GeneralObject> {
 	 * @memberof MongoCollection
 	 */
 	public getAll(): Promise<TC[]> {
-		return this.getItems(null);
+		return this.getItems({});
 	}
 
 	/**
-	 * get items matching the Filter
+	 *
+	 *
+	 * @protected
+	 * @param {FilterQuery<TC>} Filter
+	 * @returns {FilterQuery<TC>}
+	 * @memberof MongoCollection
+	 */
+	protected classFilter(Filter: FilterQuery<TC>): FilterQuery<TC> {
+		let f = Filter;
+		if (this.useClassFilter) {
+			const item = new this.defaultFactory();
+			if (item.className) {
+				f = Object.assign({ class: item.className }, Filter);
+			}
+		}
+		return f;
+	}
+
+	/**
+	 * get items matching the Filter (wrapper for find)
 	 *
 	 * @param {FilterQuery<TC>} Filter
 	 * @returns {Promise<TC[]>}
@@ -311,7 +343,8 @@ export class MongoCollection<TC extends GeneralObject> {
 		if (!this.Collection) {
 			return Promise.reject('No Collection set!');
 		}
-		return this.Collection.find(Filter).toArray();
+
+		return this.Collection.find(this.classFilter(Filter)).toArray().then(a => this.toObject(a) as TC[]);
 	}
 
 	/**
@@ -322,11 +355,30 @@ export class MongoCollection<TC extends GeneralObject> {
 	 *
 	 * @memberof MongoDB
 	 */
-	public getItem(uid: ObjectID | string): Promise<TC> {
+	public getItem(uid: ObjectID | string): Promise<TC | null> {
 		if (!this.Collection) {
 			return Promise.reject('No Collection set!');
 		}
-		return this.Collection.findOne({ _id: uid });
+		return this.Collection.findOne<TC>(this.classFilter({ _id: uid } as FilterQuery<TC>)).then(item => this.toObject(item) as TC);
+	}
+
+	/**
+	 * find a single item (first matching) by FilterQuery (wrapper for findOne)
+	 *
+	 * @param {FilterQuery<TC>} Filter
+	 * @returns {(Promise<TC | null>)}
+	 * @memberof MongoCollection
+	 */
+	public async findItem(Filter: FilterQuery<TC>): Promise<TC | null> {
+		if (!this.Collection) {
+			throw ('No Collection set!');
+		}
+		try {
+			const item = await this.Collection.findOne<TC>(this.classFilter(Filter));
+			return this.toObject(item) as TC;
+		} catch (error) {
+			throw error;
+		}
 	}
 
 	/**
@@ -338,7 +390,7 @@ export class MongoCollection<TC extends GeneralObject> {
 	 * @memberof MongoCollection
 	 */
 	public watch(pipeline?: any, options?: ChangeStreamOptions): ChangeStream {
-		const opt = Object.assign({}, this.DEFAULT_CS_OPTION, options || {});
+		const opt = Object.assign({}, { readPreference: "secondaryPreferred" }, options || {});
 		return this.Collection.watch(pipeline || {}, opt);
 	}
 
@@ -350,9 +402,22 @@ export class MongoCollection<TC extends GeneralObject> {
 	 * @returns {string}
 	 * @memberof MongoDB
 	 */
-	public static generateId256(...Items): string {
+	public static generateId256(...Items: any[]): string {
 		let input = Items.join('#');
-		const secret = cfg.db.idSecret || "d3f4ul753cR3T";
+		return MongoCollection.hash256(input);
+	}
+
+	/**
+	 * hash a string with sha256
+	 * for example: password hashing
+	 *
+	 * @static
+	 * @param {string} input
+	 * @returns {string}
+	 * @memberof MongoCollection
+	 */
+	public static hash256(input: string): string {
+		const secret = process.env.SECRET || 'd3f4ul75ecr3t';
 		return createHmac('sha256', secret).update(input).digest('hex');
 	}
 
@@ -364,7 +429,7 @@ export class MongoCollection<TC extends GeneralObject> {
 	 * @returns {string}
 	 * @memberof MongoDB
 	 */
-	protected idGenerator256(...Items): string {
+	protected idGenerator256(...Items: any[]): string {
 		return MongoCollection.generateId256(...Items);
 	}
 
@@ -378,5 +443,38 @@ export class MongoCollection<TC extends GeneralObject> {
 	 */
 	public get namespace(): string {
 		return this.Collection.namespace;
+	}
+
+	/**
+	 *
+	 *
+	 * @param {(TC | TC[] | null)} data
+	 * @returns {(TC | TC[] | null)}
+	 * @memberof MongoCollection
+	 */
+	toObject(data: TC | TC[] | null): TC | TC[] | null {
+		if (!data) {
+			return null;
+		}
+		if (Array.isArray(data)) {
+			return data.map(item => plainToClass(this.getFactory(item), item));
+		} else {
+			return plainToClass(this.getFactory(data), data);
+		}
+	}
+
+	/**
+	 *
+	 *
+	 * @param {TC} data
+	 * @returns {(new (item?: TC | undefined) => TC)}
+	 * @memberof MongoCollection
+	 */
+	getFactory(data: TC): new (item?: TC | undefined) => TC {
+		if (data.className) {
+			return this.factories[data.className] || this.defaultFactory;
+		} else {
+			return this.defaultFactory;
+		}
 	}
 }
