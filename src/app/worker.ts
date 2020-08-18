@@ -1,4 +1,3 @@
-require('dotenv').config();
 import { Logger, Loglevel } from '../util';
 import { RelayIO } from './RelayIO';
 import { WorkerProcess } from './WorkerProcess';

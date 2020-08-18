@@ -192,7 +192,7 @@ export class RelayIO extends WorkerProcess {
 	 * @memberof RelayIO
 	 */
 	protected setupDiscordBot(): void {
-		if (!process.env.DISCORD_ENABLED) {
+		if (![1, '1', true, 'true'].includes(process.env.DISCORD_ENABLED.toLowerCase())) {
 			Logger(Loglevel.INFO, "[RelayIO:setupDiscordBot]", `Discord not enabled.`);
 			return;
 		} else {

@@ -1,4 +1,3 @@
-require('dotenv').config();
 import { } from "ws";
 import { CLICommand, Logger, Loglevel } from "./util";
 const WebSocketClient = require('ws');

@@ -1,8 +1,8 @@
 import { LOGTAG, ConsoleColors } from "./enums";
 
 export function Logger(level: number, source: string, ...messages: any[]): void {
-    const currentLevel = process.env.LOGLEVEL || 0;
-    const useColor = Boolean(process.env.LOGCOLOR);
+    const currentLevel = Number(process.env.APP_LOGLEVEL) || 0;
+    const useColor = [1, '1', true, 'true'].includes(process.env.APP_LOGCOLOR.toLowerCase());
 
     if (level < currentLevel) {
         return;

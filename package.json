@@ -1,6 +1,6 @@
 {
 	"name": "oz_rw_gi_relaysserver",
-	"version": "0.12.0",
+	"version": "0.12.1",
 	"main": "dist/app.js",
 	"private": true,
 	"engines": {
@@ -14,18 +14,17 @@
 	"dependencies": {
 		"class-transformer": "^0.3.1",
 		"discord.js": "^12.2.0",
-		"dotenv": "^8.2.0",
 		"jdenticon": "^3.0.1",
 		"module-alias": "^2.2.2",
 		"mongodb": "^3.1.13",
 		"rxjs": "^6.4.0",
-		"typescript": "^3.9.7",
 		"ws": "^7.3.1"
 	},
 	"devDependencies": {
 		"@types/mongodb": "^3.1.22",
 		"@types/node": "^14.0.27",
-		"@types/ws": "^7.2.6"
+		"@types/ws": "^7.2.6",
+		"typescript": "^3.9.7"
 	},
 	"_moduleAliases": {
 		"@": "dist"

@@ -1,0 +1,45 @@
+version: '3.1'
+services:
+
+  rwglobalintercom:
+    build: .
+    restart: always
+    container_name: node_rw_global_intercom
+    ports:
+      - 47015:47015
+    networks:
+      - ginet
+    depends_on:
+      - gimongo
+    environment:
+      APP_TITLE: ${APP_TITLE}
+      APP_CLI_PORT: ${APP_CLI_PORT}
+      APP_WSS_PORT: ${APP_WSS_PORT}
+      APP_LOGLEVEL: ${APP_LOGLEVEL}
+      APP_LOGCOLOR: ${APP_LOGCOLOR}
+      DISCORD_ENABLED: ${DISCORD_ENABLED}
+      DISCORD_TOKEN: ${DISCORD_TOKEN}
+      MONGODB_URI: ${MONGODB_URI}
+      MONGODB_DB: ${MONGODB_DB}
+      MONGODB_APPNAME: ${MONGODB_APPNAME}
+  
+  gimongo:
+    image: mongo
+    restart: always
+    container_name: gi_mongodb
+    volumes:
+      - gimongodata:/data/db
+    hostname: mongohost
+    # ports:
+    #   - 27017:27017
+    networks:
+      - ginet
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PASSWORD}
+
+volumes:
+  gimongodata:
+
+networks:
+  ginet:
